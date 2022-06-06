@@ -4,6 +4,7 @@ from re import A
 import streamlit as st
 import numpy as np
 import pandas as pd
+import yfinance as yf
 from PIL import Image
 import altair as alt
 import time
