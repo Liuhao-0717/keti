@@ -5,7 +5,11 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from PIL import Image
+import yfinance as yf
+import altair as alt
 import time
+
+
 
 genre = st.sidebar.radio(
      "言語を選んでください",
@@ -46,7 +50,7 @@ if genre == '日本語':
      if option  =='ハルビン':
        option1 = st.selectbox(
          '了解したいこと',
-         ('了解したいこと','お祭り','料理','風景'))
+         ('了解したいこと','お祭り','料理','風景','為替レート'))
        if option1 =='お祭り':
          st.header("ハルビン国際氷雪祭り")
 
@@ -71,6 +75,8 @@ if genre == '日本語':
          st.video(video_bytes)
          st.write("サイトのリンク先:")
          st.markdown("[bilibili-D伊L](https://www.bilibili.com/video/BV1jf4y1F7yY/?spm_id_from=333.788.recommend_more_video.0)")
+
+
        elif option1=='料理':
          st.header('焼き冷麺')
          st.write('焼き冷麺は1999年前後、中国黒龍江省密山市のある中学校の前の屋台が発祥とされています。冷麺は元々朝鮮族の伝統的な食べ物で、中国の朝鮮族はほとんど東北で暮らしていますので、「焼冷麺」の屋台には「東北焼冷麺」という文字がよく書かれています。当初は冷麺の揚げもの、炭火焼、鉄板焼の3種類がありましたが、今まで続いてきたのは鉄板焼しかないそうです。')
@@ -81,6 +87,8 @@ if genre == '日本語':
          st.header('鍋包肉')
          st.write('鍋包肉は黒龍江省ハルビン生まれの料理で、1907年創業で今日も営業している老舗レストラン「老厨家」の初代調理人の鄭興文が、当時この地にいたロシア人向けに創案した一品です。')
          st.image("guobaorou.webp")
+
+
        elif option1==('風景') :
          st.header('中央大街')
          st.write('ハルビンを代表する歴史的な大通りで、南北の直線の通りで全長1450m・幅21.34m（内、車道の幅は10.8m）。南端は経緯街（十字街）、北端は松花江防洪記念塔。')
@@ -92,10 +100,87 @@ if genre == '日本語':
          st.header('ボルガ荘園')
          st.write('ボルガ荘園はハルビン郊外の芦河畔にあり、面積は60万平方メートル以上、ハルビンの歴史、ロシア文化をテーマとして、国家AAAA級文化観光景勝地、ロシアと中国の文化交流基地、ロシア芸術家協会創造基地、モスクワ大学国際交流センターがあります。荘園は「長期的な文化、価値のある味」という経営理念を提唱し、復元された聖ニコラス教会と川辺のレストランは昔のハルビンの人々の思い出を伝え、ペトロフ芸術宮殿とプーシキン展示館は文化芸術交流のプラットフォームを提供します。')
          st.image('fuerjia.jpg')
+
+       elif option1==('為替レート'):
+         st.sidebar.write("""
+         # 為替レート
+         以下のオプションから表示日数を指定できます。
+         """)
+
+         st.sidebar.write("""
+         ## 表示日数選択
+         """)
+
+         days = st.sidebar.slider('日数', 1, 365, 200)
+
+         st.write(f"""
+         ### 過去 **{days}日間** の為替レート
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## 為替レートの範囲指定
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 '範囲を指定してください。',
+                 0.0, 30.0, (0.0, 30.0)
+             )
+
+             tickers = {
+                 '中国/アメリカ': 'CNY=X',#中美
+                 '中国/インドネシア': 'IDRCNY=X',#中印
+                 '中国/日本': 'CNYJPY=X'#中日
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 '国を選択してください。',
+                 list(df.index),
+                 ['中国/アメリカ', '中国/インドネシア', '中国/日本']
+             )
+
+             if not companies:
+                 st.error('少なくとも為替レートは選んでください。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 為替レート", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "おっと！なにかエラーが起きているようです。"
+             )
+
+
      elif option == '東京都':
        option2 = st.selectbox(
            '了解したいこと',
-           ('了解したいこと','お祭り','料理','風景'))
+           ('了解したいこと','お祭り','料理','風景','為替レート'))
        if option2 =='お祭り':
          st.header("花火大会")
          st.write('7～8月に行なわれることの多い花火大会は夏の風物詩です。趣向を凝らした花火を楽しみにしている方も多いでしょう。花火は無邪気に見物するだけでも良いのですが、より楽しみたいなら花火に関して知識を深めておくことをおすすめします。花火大会の歴史や花火の種類などを知れば花火の表面的な美しさの裏にある伝統的な側面に気付くことができるでしょう。')
@@ -145,10 +230,84 @@ if genre == '日本語':
          st.write('浅草には昔の東京の雰囲気が残っており、歴史ある浅草寺の近くの仲見世通り沿いに、伝統的な手工芸品や食べものの屋台があります。19 世紀半ばに建設された花やしき遊園地にはスリルあふれる乗り物アトラクションとカフェがあり、川沿いの区立隅田公園ではフェスティバルや花火大会が定期的に開催されます。近隣にはカジュアルな居酒屋が点在し、串に刺して焼いた肉とビールを提供する焼鳥屋もあります。')
 
          st.image('qiancao.jpg')
+       elif option2==('為替レート'):
+         st.sidebar.write("""
+         # 為替レート
+         以下のオプションから表示日数を指定できます。
+         """)
+
+         st.sidebar.write("""
+         ## 表示日数選択
+         """)
+
+         days = st.sidebar.slider('日数', 1, 365, 200)
+
+         st.write(f"""
+         ### 過去 **{days}日間** の為替レート
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## 為替レートの範囲指定
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 '範囲を指定してください。',
+                 0.0, 30.0, (0.0, 30.0)
+             )
+
+             tickers = {
+                 '日本/アメリカ': 'JPY=X',#日美
+                 '日本/インドネシア': 'IDRJPY=X',#印日
+                 '日本/中国': 'CNYJPY=X'#中日
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 '国を選択してください。',
+                 list(df.index),
+                 ['日本/アメリカ', '日本/インドネシア', '日本/中国']
+             )
+
+             if not companies:
+                 st.error('少なくとも為替レートは選んでください。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 為替レート", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "おっと！なにかエラーが起きているようです。"
+             )
      elif option == 'ジャカルタ':
        option3 = st.selectbox(
            '了解したいこと',
-           ('了解したいこと','お祭り','料理','風景'))
+           ('了解したいこと','お祭り','料理','風景','為替レート'))
        if option3 =='お祭り':
          st.header("イド・アルフィトル")
 
@@ -200,14 +359,90 @@ if genre == '日本語':
          st.write('実際には数百の島があり、そのうち10島ほどが有人の島となっています。ジャカルタの北部「アンチョール港」からボートで30分〜2時間でジャカルタの海岸からは想像できないほど美しい海が出迎えてくれます！')
          st.write('のんびりと読書を楽しむもよし、シュノーケリングで魚達とたわむれるもよし、オプションでサンセットクルーズもつけられます。ボートが揺れるので、酔いやすい方は酔い止めを持って行って！')
          st.image('dao.jpg')
+
+       elif option3==('為替レート'):
+         st.sidebar.write("""
+         # 為替レート
+         以下のオプションから表示日数を指定できます。
+         """)
+
+         st.sidebar.write("""
+         ## 表示日数選択
+         """)
+
+         days = st.sidebar.slider('日数', 1, 365, 200)
+
+         st.write(f"""
+         ### 過去 **{days}日間** の為替レート
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## 為替レートの範囲指定
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 '範囲を指定してください。',
+                 0.01, 0.0001, (0.01, 0.0001)
+             )
+
+             tickers = {
+                 'インドネシア/アメリカ': 'IDR=X',#印美
+                 'インドネシア/日本': 'IDRJPY=X',#印日
+                 'インドネシア/中国': 'IDRCNY=X',#中印
+
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 '国を選択してください。',
+                 list(df.index),
+                 ['インドネシア/アメリカ', 'インドネシア/日本', 'インドネシア/中国']
+             )
+
+             if not companies:
+                 st.error('少なくとも為替レートは選んでください。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 為替レート", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "おっと！なにかエラーが起きているようです。"
+             )
          
 
-##############################################################################
+#####################################################################################################################################################################################
 elif genre == '中国語':
      st.title('Streamlit课题')
      st.header("城市介绍")
 
-     st.write('リュウコウ、21A3810')
+     st.write('刘昊、21A3810')
      st.markdown("[我的Github](https://github.com/Liuhao-0717)")
      latest_iteration = st.empty()  #进度条
      bar = st.progress(0)
@@ -239,7 +474,7 @@ elif genre == '中国語':
      if option  =='哈尔滨':
        option1 = st.selectbox(
          '想了解的事',
-         ('想了解的事','节日','美食','风景'))
+         ('想了解的事','节日','美食','风景','汇率'))
        if option1 =='节日':
          st.header("哈尔滨国际冰雪节")
 
@@ -285,10 +520,84 @@ elif genre == '中国語':
          st.header('伏尔加庄园')
          st.write('伏尔加庄园位于哈尔滨市郊的阿什河畔，占地面积60多万平方米，以哈尔滨历史和俄罗斯文化为主题，是国家AAAA级文化旅游景区、中俄文化交流基地、俄罗斯艺术家协会创作基地和莫斯科大学国际交流中心。 庄园倡导 "长久的文化，有价值的品位 "的经营理念，修复后的圣尼古拉教堂和江边餐厅传递着哈尔滨人对过去的记忆，而彼得罗夫艺术宫和普希金展览馆则为文化艺术交流提供了平台。')
          st.image('fuerjia.jpg')
+       elif option1==('汇率'):
+         st.sidebar.write("""
+         # 汇率
+         你可以从以下选项中指定要显示的天数。
+         """)
+
+         st.sidebar.write("""
+         ## 选择表示天数
+         """)
+
+         days = st.sidebar.slider('天数', 1, 365, 200)
+
+         st.write(f"""
+         ### 过去 **{days}日间** 的汇率
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## 汇率具体范围
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 '请选择汇率具体范围。',
+                 0.0, 30.0, (0.0, 30.0)
+             )
+
+             tickers = {
+                 '中国/美国': 'CNY=X',#中美
+                 '中国/印度尼西亚': 'IDRCNY=X',#中印
+                 '中国/日本': 'CNYJPY=X'#中日
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 '请选择国家。',
+                 list(df.index),
+                 ['中国/美国', '中国/印度尼西亚', '中国/日本']
+             )
+
+             if not companies:
+                 st.error('请至少选择一种汇率。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 汇率", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "哎呀！出错了0.0。"
+             )
      elif option == '东京都':
        option2 = st.selectbox(
            '想了解的事',
-           ('想了解的事','节日','美食','风景'))
+           ('想了解的事','节日','美食','风景','汇率'))
        if option2 =='节日':
          st.header("烟花大会")
          st.write('通常在7月和8月举行的烟花表演是夏季的一个传统。 许多人期待着精心制作的烟花表演。 虽然只是天真无邪地观看烟花是可以的，但如果你想更多地享受烟花，我们建议你多了解一下烟花。 了解烟花表演的历史和不同类型的烟花将帮助你认识到烟花表面之美的背后的传统方面。')
@@ -338,10 +647,85 @@ elif genre == '中国語':
          st.write('浅草保留了旧东京的气氛，在历史悠久的浅草寺附近的中美大道上有传统的手工艺品和食品摊位；建于19世纪中期的花屋敷游乐园有惊险的游乐设施和咖啡馆；沿河的隅田公园有节日和焰火表演。 沿河的隅田公园定期举行节庆活动和烟花表演。 附近遍布着休闲的居酒屋（日本风格的酒吧），以及提供烤肉串和啤酒的烤肉店。')
 
          st.image('qiancao.jpg')
+
+       elif option2==('汇率'):
+         st.sidebar.write("""
+         # 汇率
+         你可以从以下选项中指定要显示的天数。
+         """)
+
+         st.sidebar.write("""
+         ## 选择表示天数
+         """)
+
+         days = st.sidebar.slider('天数', 1, 365, 200)
+
+         st.write(f"""
+         ### 过去 **{days}日间** 的汇率
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## 汇率具体范围
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 '请选择汇率具体范围。',
+                 0.0, 150.0, (0.0, 150.0)
+             )
+
+             tickers = {
+                 '日本/美国': 'JPY=X',#中美
+                 '日本/印度尼西亚': 'IDRJPY=X',#中印
+                 '日本/中国': 'CNYJPY=X'#中日
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 '请选择国家。',
+                 list(df.index),
+                 ['日本/美国', '日本/印度尼西亚', '日本/中国']
+             )
+
+             if not companies:
+                 st.error('请至少选择一种汇率。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 汇率", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "哎呀！出错了0.0。"
+             )
      elif option == '雅加达':
        option3 = st.selectbox(
            '想了解的事',
-           ('想了解的事','节日','美食','风景'))
+           ('想了解的事','节日','美食','风景','汇率'))
        if option3 =='节日':
          st.header("开斋节")
 
@@ -392,13 +776,86 @@ elif genre == '中国語':
          st.write('事实上，这里有数百个岛屿，其中约有10个有人居住。 从雅加达北部的 "锚港 "乘船30分钟至2小时，迎接你的是雅加达海岸线上可以想象到的最美丽的大海!')
          st.write('享受悠闲的阅读，与鱼儿一起浮潜，或参加自选的日落巡航。 船上摇摇晃晃，如果你容易晕船请带好防晕药!')
          st.image('dao.jpg')
+       elif option3==('汇率'):
+         st.sidebar.write("""
+         # 汇率
+         你可以从以下选项中指定要显示的天数。
+         """)
 
-##############################################################################
+         st.sidebar.write("""
+         ## 选择表示天数
+         """)
+
+         days = st.sidebar.slider('天数', 1, 365, 200)
+
+         st.write(f"""
+         ### 过去 **{days}日间** 的汇率
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## 汇率具体范围
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 '请选择汇率具体范围。',
+                 0.01, 0.0001, (0.01, 0.0001)
+             )
+
+             tickers = {
+                 '印度尼西亚/美国': 'IDR=X',#中美
+                 '印度尼西亚/日本': 'IDRJPY=X',#中印
+                 '印度尼西亚/中国': 'JPYCNY=X'#中日
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 '请选择国家。',
+                 list(df.index),
+                 ['印度尼西亚/美国', '印度尼西亚/日本', '印度尼西亚/中国']
+             )
+
+             if not companies:
+                 st.error('请至少选择一种汇率。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 汇率", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "哎呀！出错了0.0。"
+             )
+###########################################################################################################################################################################################################
 elif genre == '英語':
      st.title('Streamlit Homework')
      st.header("Introducing Cities")
 
-     st.write('リュウコウ、21A3810')
+     st.write('LIU HAO、21A3810')
      st.markdown("[My Github](https://github.com/Liuhao-0717)")
      latest_iteration = st.empty()  #进度条
      bar = st.progress(0)
@@ -430,7 +887,7 @@ elif genre == '英語':
      if option  =='Haerbin':
        option1 = st.selectbox(
          'Things want to know',
-         ('Things want to know','festival','Gourmet','Landscapes'))
+         ('Things want to know','festival','Gourmet','Landscapes','Exchange Rates'))
        if option1 =='festival':
          st.header("Harbin International Ice and Snow Festival")
 
@@ -481,10 +938,85 @@ elif genre == '英語':
          ###### Volga Manor is located on the banks of the Ashi River in the suburbs of Harbin, covering an area of more than 600,000 square meters, with Harbin's history and Russian culture as its theme, it is a national AAAA-class cultural tourism scenic spot, a base for cultural exchange between Russia and China, a creative base for Russian artists' association, and an international exchange center of Moscow University. The manor advocates the management concept of "long-term culture, valuable taste"; the restored St. Nicholas Church and riverside restaurant convey memories of the people of Harbin in the past; and the Petrov Art Palace and Pushkin Exhibition Hall provide a platform for cultural and artistic exchange.
          """
          st.image('fuerjia.jpg')
+
+       elif option1==('Exchange Rates'):
+         st.sidebar.write("""
+         # Exchange Rates
+         You can specify the number of days to be displayed from the following options。
+         """)
+
+         st.sidebar.write("""
+         ## Select to indicate the number of days
+         """)
+
+         days = st.sidebar.slider('number of days', 1, 365, 200)
+
+         st.write(f"""
+         ### Exchange rates for the past {days} days
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## Specific range of exchange rates
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 'Please select a specific range of exchange rates。',
+                 0.0, 30.0, (0.0, 30.0)
+             )
+
+             tickers = {
+                 'China/U.S.A.': 'CNY=X',#中美
+                 'China/Indonesia': 'IDRCNY=X',#中印
+                 'China/Japan': 'CNYJPY=X'#中日
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 'Please select the country',
+                 list(df.index),
+                 ['China/U.S.A.', 'China/Indonesia', 'China/Japan']
+             )
+
+             if not companies:
+                 st.error('Please select at least one exchange rate。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 'Exchange Rates'", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "Error!"
+             )         
      elif option == 'Tokyo':
        option2 = st.selectbox(
            'Things want to know',
-           ('Things want to know','festival','Gourmet','Landscapes'))
+           ('Things want to know','festival','Gourmet','Landscapes','Exchange Rates'))
        if option2 =='festival':
          st.header("Fireworks Display")
          st.write('Fireworks displays, which are often held in July and August, are a summer tradition. Many people look forward to seeing the elaborate fireworks displays. While it is fine to just innocently watch the fireworks, we recommend that you learn more about fireworks if you want to enjoy them more. Knowing the history of fireworks displays and the different types of fireworks will help you realize the traditional aspects behind the superficial beauty of fireworks.')
@@ -537,10 +1069,85 @@ elif genre == '英語':
          st.write('Asakusa retains the atmosphere of old Tokyo, with traditional handicrafts and food stalls along Nakamise-dori near the historic Senso-ji Temple; the mid-19th century Hanayashiki amusement park with its thrilling ride attractions and cafes; and Sumida Park along the river, where festivals and fireworks displays are held regularly. Festivals and fireworks displays are held regularly in Sumida Park along the river. The neighborhood is dotted with casual izakayas (Japanese-style pubs) and yakitori restaurants serving skewered grilled meats and beer.')
 
          st.image('qiancao.jpg')
+
+       elif option2==('Exchange Rates'):
+         st.sidebar.write("""
+         # Exchange Rates
+         You can specify the number of days to be displayed from the following options。
+         """)
+
+         st.sidebar.write("""
+         ## Select to indicate the number of days
+         """)
+
+         days = st.sidebar.slider('number of days', 1, 365, 200)
+
+         st.write(f"""
+         ### Exchange rates for the past{days} days
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## Specific range of exchange rates
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 'Please select a specific range of exchange rates。',
+                 0.0, 150.0, (0.0, 150.0)
+             )
+
+             tickers = {
+                 'Japan/U.S.A.': 'JPY=X',#中美
+                 'Japan/Indonesia': 'IDRJPY=X',#中印
+                 'Japan/China': 'CNYJPY=X'#中日
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 'Please select the country',
+                 list(df.index),
+                 ['Japan/U.S.A.', 'Japan/Indonesia', 'Japan/China']
+             )
+
+             if not companies:
+                 st.error('Please select at least one exchange rate。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 'Exchange Rates'", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "Error!"
+             )         
      elif option == 'Jakarta':
        option3 = st.selectbox(
            'Things want to know',
-           ('Things want to know','festival','Gourmet','Landscapes'))
+           ('Things want to know','festival','Gourmet','Landscapes','Exchange Rates'))
        if option3 =='festival':
          st.header("Eid al-Fitr")
 
@@ -583,7 +1190,7 @@ elif genre == '英語':
        elif option3 == 'Landscapes':
          st.header('Taman Mini Indonesia Indah')
          """
-         ######Indonesia is said to consist of 18,110 islands of various sizes and about 300 ethnic groups. A theme park where you can take a peek into the life of each ethnic group and feel as if you have toured all of Indonesia at once is located about an hour's drive from central Jakarta.
+         ###### Indonesia is said to consist of 18,110 islands of various sizes and about 300 ethnic groups. A theme park where you can take a peek into the life of each ethnic group and feel as if you have toured all of Indonesia at once is located about an hour's drive from central Jakarta.
          """
          st.write('The park has a Bali Pavilion, a Java Pavilion, and other buildings unique to each island, as well as a Komodo Dragon Museum and an aquarium, making it one of the spots where both adults and children can enjoy the whole day.')
          st.image('pari.jpg')
@@ -592,7 +1199,7 @@ elif genre == '英語':
 
 
          """
-         ######this is a Christian cathedral. What a surprise, it's right in front of the Istiklal Mosque!
+         ###### this is a Christian cathedral. What a surprise, it's right in front of the Istiklal Mosque!
          """
          st.write('Once inside, it is a different world. Almost 90% of the Indonesian population seems to be Muslim, but there are Christians as well. You will be moved by the people praying single-mindedly in hymns.')
          st.image('jiaotang.jpg')
@@ -600,7 +1207,82 @@ elif genre == '英語':
          st.header('Pulau Seribu')
          st.write('It is the closest beach resort to Jakarta. Prousrib means "thousand islands" in Indonesian.')
          """
-         ######In fact, there are hundreds of islands, about 10 of which are inhabited. A 30-minute to 2-hour boat ride from Jakarta's northern "Anchor Harbor" welcomes you to the most beautiful ocean imaginable from Jakarta's coast!
+         ###### In fact, there are hundreds of islands, about 10 of which are inhabited. A 30-minute to 2-hour boat ride from Jakarta's northern "Anchor Harbor" welcomes you to the most beautiful ocean imaginable from Jakarta's coast!
          """
          st.write('You can enjoy reading a book at leisure, snorkeling with fish, or take a sunset cruise as an option. The boat is very bumpy, so take anti-sickness medicine if you get easily intoxicated!')
          st.image('dao.jpg')
+
+       elif option3==('Exchange Rates'):
+         st.sidebar.write("""
+         # Exchange Rates
+         You can specify the number of days to be displayed from the following options。
+         """)
+
+         st.sidebar.write("""
+         ## Select to indicate the number of days
+         """)
+
+         days = st.sidebar.slider('number of days', 1, 365, 200)
+
+         st.write(f"""
+         ### Exchange rates for the past {days} days
+         """)
+
+         @st.cache
+         def get_data(days, tickers):
+             df = pd.DataFrame()
+             for company in tickers.keys():
+                 tkr = yf.Ticker(tickers[company])
+                 hist = tkr.history(period=f'{days}d')
+                 hist.index = hist.index.strftime('%d %B %Y')
+                 hist = hist[['Close']]
+                 hist.columns = [company]
+                 hist = hist.T
+                 hist.index.name = 'Name'
+                 df = pd.concat([df, hist])
+             return df
+
+         try: 
+             st.sidebar.write("""
+             ## Specific range of exchange rates
+             """)
+             ymin, ymax = st.sidebar.slider(
+                 'Please select a specific range of exchange rates。',
+                 0.0, 150.0, (0.0, 150.0)
+             )
+
+             tickers = {
+                 'Indonesia/U.S.A.': 'IDR=X',#中美
+                 'Indonesia/Japan': 'IDRJPY=X',#中印
+                 'Indonesia/China': 'IDRCNY=X'#中日
+             }
+             df = get_data(days, tickers)
+             companies = st.multiselect(
+                 'Please select the country',
+                 list(df.index),
+                 ['Indonesia/U.S.A.', 'Indonesia/Japan', 'Indonesia/China']
+             )
+
+             if not companies:
+                 st.error('Please select at least one exchange rate。')
+             else:
+                 data = df.loc[companies]
+                 st.write("### 'Exchange Rates'", data.sort_index())
+                 data = data.T.reset_index()
+                 data = pd.melt(data, id_vars=['Date']).rename(
+                     columns={'value': 'Stock Prices(USD)'}
+                 )
+                 chart = (
+                     alt.Chart(data)
+                     .mark_line(opacity=0.8, clip=True)
+                     .encode(
+                         x="Date:T",
+                         y=alt.Y("Stock Prices(USD):Q", stack=None, scale=alt.Scale(domain=[ymin, ymax])),
+                         color='Name:N'
+                     )
+                 )
+                 st.altair_chart(chart, use_container_width=True)
+         except:
+             st.error(
+                 "Error!"
+             )         
