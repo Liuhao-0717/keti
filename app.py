@@ -5,7 +5,6 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from PIL import Image
-import yfinance as yf
 import altair as alt
 import time
 
